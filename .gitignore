@@ -1,15 +1,77 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+# ---- OS junk ---------------------------------------------------------
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+Thumbs.db
+
+# ---- IDE / Editors ---------------------------------------------------
+*.iml
+.idea/
+!.idea/codeStyles/
+!.idea/runConfigurations/
+.vscode/
+
+# ---- Gradle ----------------------------------------------------------
+.gradle/
+**/build/
+build/
+# Keep the Gradle wrapper in VCS:
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# ---- Android / Project-local stuff ----------------------------------
 local.properties
+.signing/
+signing.properties
+
+# Keystores & certs
+*.jks
+*.keystore
+*.p12
+*.pem
+*.der
+
+# Google/Firebase configs (usually project-local secrets)
+google-services.json
+GoogleService-Info.plist
+
+# Native / NDK
+.cxx/
+externalNativeBuild/
+obj/
+
+# Artifacts / generated
+**/generated/
+captures/
+outputs/
+*.apk
+*.ap_
+*.aab
+*.aar
+*.hprof
+
+# Logs
+*.log
+
+# ---- Kotlin / KAPT / KSP --------------------------------------------
+**/kapt/
+**/kaptStubs/
+**/ksp/
+.kotlinc/
+*.kotlin_module
+
+# ---- Lint / Reports --------------------------------------------------
+lint/
+**/reports/
+**/test-results/
+
+# ---- Fastlane (if used) ---------------------------------------------
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+
+# ---- Env / Secrets ---------------------------------------------------
+*.env
+.env*
+secret.properties
+*.local
