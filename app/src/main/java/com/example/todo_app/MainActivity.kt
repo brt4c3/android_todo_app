@@ -49,11 +49,13 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val vm: TaskViewModel = viewModel(factory = VmFactory(application))
                         val id = it.arguments!!.getLong("id")
-                        val task by vm.forId(id).collectAsState(null)
+                        val task by vm.forId(id).collectAsState(initial = null)
+                        val isLoading by vm.loading.collectAsState(initial = false)
 
                         task?.let { t ->
                             TaskScreen(
                                 task = t,
+                                isRefreshing = isLoading,                 // NEW
                                 formatActual = vm::formatActual,
                                 onStart = { vm.start(id) },
                                 onStop  = { vm.stop(id) },

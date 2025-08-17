@@ -1,17 +1,35 @@
 package com.example.todo_app.data
 
 // data/Task.kt
-
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "tasks")
 data class Task(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val task: String,              // "task_0001", default set in repo
-    val exp_date_epoch: Long,      // expiration date (midnight local) millis
-    val exp_dur_minutes: Long,     // expected duration in minutes (e.g., 10080 = 7d)
-    val act_minutes: Long,         // accumulated actual minutes
+
+    // UI fields
+    val task: String,                // e.g., "task_0001"
+
+    // 1) Expiration (strict due) — full datetime in millis
+    val exp_due_epoch: Long,
+
+    // 2) Expected finish (manual) — full datetime in millis
+    val exp_finish_epoch: Long,
+
+    // 3) Expected duration (manual) — minutes total
+    val exp_dur_minutes: Long,
+
+    // 4) Actual time spent — minutes total (accumulated)
+    val act_minutes: Long,
+
+    // Notes (markdown)
     val note: String,
-    val running_since_epoch: Long? // null if not running
+
+    // Status
+    val status: Status = Status.WIP,
+
+    // Timer — non-null while running
+    val running_since_epoch: Long? = null
 )
+

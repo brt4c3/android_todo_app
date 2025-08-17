@@ -1,13 +1,13 @@
 package com.example.todo_app.data
 
-// data/AppDatabase.kt
-
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
-@Database(entities = [Task::class], version = 2)
+@Database(entities = [Task::class], version = 4)
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
 
@@ -16,10 +16,12 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun get(context: Context): AppDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(
-                context.applicationContext, AppDatabase::class.java, "todo-db"
+                context.applicationContext,
+                AppDatabase::class.java,
+                "todo-db"
             )
-                // For a quick start, destructive migration. Ask me for a proper Migration if needed.
-                // Old overload is deprecated; this keeps the same behavior (drop & recreate on mismatch)
+                // For this skeleton we drop/recreate on schema change.
+                // Replace with a proper Migration if you need to preserve data.
                 .fallbackToDestructiveMigration()
                 .build().also { INSTANCE = it }
         }

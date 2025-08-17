@@ -68,6 +68,10 @@ dependencies {
     // Markdown (optional)
     implementation("org.commonmark:commonmark:0.22.0")
 
+    // Icons
+    implementation("androidx.compose.material:material-icons-extended:1.7.3")
+
+
     // Tests
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
