@@ -27,10 +27,20 @@ class MainActivity : ComponentActivity() {
         setContent {
             TodoAppTheme {                  // ← was MaterialTheme { ... }
                 val nav = androidx.navigation.compose.rememberNavController()
-                androidx.navigation.compose.NavHost(navController = nav, startDestination = "dashboard") {
+                androidx.navigation.compose.NavHost(navController = nav, startDestination = "home") {
             //MaterialTheme {
                 //val nav = rememberNavController()
                 //NavHost(navController = nav, startDestination = "dashboard") {
+                    composable("home") {
+                        HomeScreen(
+                            onEnter = {
+                                nav.navigate("dashboard") {
+                                    popUpTo("home") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+
                     composable("dashboard") {
                         val vm: DashboardViewModel = viewModel(factory = VmFactory(application))
                         val state by vm.state.collectAsState()
