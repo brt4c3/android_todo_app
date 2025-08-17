@@ -1,0 +1,4 @@
+<resources>
+    <!-- Material3 app theme -->
+    <style name="ThemeTodoApp" parent="Theme.Material3.DayNight.NoActionBar" />
+</resources>
