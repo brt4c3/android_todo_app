@@ -196,19 +196,19 @@ enum class Quality {
         powerSave || this == LOW -> Profile(
             refinement = 0.030f,
             cellTargetPx = 36f,
-            timeSpeed   = 0.10f,
+            timeSpeed   = 0.05f,
             contours    = false
         )
         this == MEDIUM -> Profile(
             refinement = 0.036f,
             cellTargetPx = 28f,
-            timeSpeed   = 0.12f,
+            timeSpeed   = 0.05f,
             contours    = false
         )
         this == HIGH -> Profile(
             refinement = 0.042f,
             cellTargetPx = 22f,
-            timeSpeed   = 0.14f,
+            timeSpeed   = 0.02f,
             contours    = true
         )
         else -> Profile(

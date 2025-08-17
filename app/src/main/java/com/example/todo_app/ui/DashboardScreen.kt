@@ -51,7 +51,7 @@ fun DashboardScreen(
             // Home or Dashboard backgrounds:
             BackgroundAnimation(
                 modifier = Modifier.fillMaxSize(),
-                quality = Quality.AUTO,    // or LOW/MEDIUM/HIGH
+                quality = Quality.HIGH,    // or LOW/MEDIUM/HIGH
                 threshold = -0.10f,        // fewer blobs if higher
                 radiantUnit = 20.dp,       // blob size scaling
                 colorUnit = 1.0f,          // color intensity
