@@ -1,10 +1,12 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Use the new Compose plugin for Kotlin 2.x (no composeOptions needed)
+    // Compose plugin for Kotlin 2.x (no composeOptions block needed)
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
-    id("kotlin-kapt")
-    // ❌ remove KSP: id("com.google.devtools.ksp")
+    // ✅ Use KSP with the SAME Kotlin version
+    id("com.google.devtools.ksp") version "2.0.21-1.0.27"
+    // ❌ REMOVE kapt (KAPT is not compatible with Kotlin 2.x / K2)
+    // id("kotlin-kapt")
 }
 
 android {
@@ -22,8 +24,8 @@ android {
 
     buildFeatures { compose = true }
 
-    // ❌ remove composeOptions when using org.jetbrains.kotlin.plugin.compose
-    // composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
+    // ❌ Not needed with the compose plugin:
+    // composeOptions { kotlinCompilerExtensionVersion = "..." }
 
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 
@@ -37,11 +39,14 @@ android {
         }
     }
 
+    // ✅ Use Java 17 for modern Compose/Kotlin toolchains
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "11" }
+    kotlinOptions { jvmTarget = "17" }
+    // (Optional, but nice)
+    // kotlin { jvmToolchain(17) }
 }
 
 dependencies {
@@ -59,26 +64,21 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3:1.3.0")
     implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation("androidx.compose.material:material-icons-extended")
 
-    // Room (ALL 2.6.1)
+    // Room -> ✅ switch to KSP
     implementation("androidx.room:room-runtime:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // Markdown (optional)
     implementation("org.commonmark:commonmark:0.22.0")
 
-    // Icons
-    implementation("androidx.compose.material:material-icons-extended:1.7.3")
-
+    // (Optional: only if you use classic Views)
+    implementation("com.google.android.material:material:1.12.0")
 
     // Tests
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-
-    implementation("com.google.android.material:material:1.12.0") // <-- add this
 }
-
-// If you had any leftover annotationProcessor deps, DELETE them.
-// If you had KSP plugin or ksp(...) deps, DELETE them too.

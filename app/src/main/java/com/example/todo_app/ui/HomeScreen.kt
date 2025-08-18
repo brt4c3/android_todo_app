@@ -37,6 +37,7 @@ import kotlin.math.sqrt
  */
 @Composable
 fun HomeScreen(
+    bg: BackgroundThemeSelection,
     modifier: Modifier = Modifier,
     onEnter: () -> Unit
 ) {
@@ -73,11 +74,13 @@ fun HomeScreen(
         // Background
         BackgroundAnimation(
             modifier = Modifier.fillMaxSize(),
-            quality = Quality.HIGH,    // or LOW/MEDIUM/HIGH
-            threshold = -0.10f,        // fewer blobs if higher
-            radiantUnit = 20.dp,       // blob size scaling
-            colorUnit = 1.0f,          // color intensity
-            opacity = 1f               // background opacity
+            quality = bg.quality,
+            threshold = bg.threshold,
+            radiantUnit = bg.radiantUnit,
+            colorUnit = bg.colorUnit,
+            opacity = bg.opacity,
+            colorTheme = bg.theme,
+            customPalette = if (bg.theme == PaletteTheme.CUSTOM) bg.customPalette else null
         )
 
 

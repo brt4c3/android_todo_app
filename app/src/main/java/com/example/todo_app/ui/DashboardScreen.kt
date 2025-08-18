@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,46 +23,53 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.launch
 
+import com.example.todo_app.ui.theme.*
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     state: DashboardViewModel.State,
+    bg: BackgroundThemeSelection,
     onNewTask: () -> Unit,
     onOpen: (Long) -> Unit,
     onDelete: (Task) -> Unit,
-    onUndo: () -> Unit
-) {
+    onUndo: () -> Unit,
+    onOpenBackgroundTheme: () -> Unit = {},
+    onHome: () -> Unit = {},
+    onSettings: () -> Unit = {}
+)  {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        //topBar = {
-        //    CenterAlignedTopAppBar(
-        //        title = { Text("Your Tasks", style = MaterialTheme.typography.titleLarge) }
-        //    )
-        //},
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNewTask,
-                icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
-                text = { Text("New Task") }
-            )
+            Row(
+                modifier = Modifier.padding(end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // New Task button (existing one)
+                ExtendedFloatingActionButton(
+                    onClick = onNewTask,
+                    icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
+                    text = { Text("New Task") }
+                )
+            }
         }
     ) { pad ->
         Box(Modifier.fillMaxSize()) {
-            // Home or Dashboard backgrounds:
             BackgroundAnimation(
                 modifier = Modifier.fillMaxSize(),
-                quality = Quality.HIGH,    // or LOW/MEDIUM/HIGH
-                threshold = -0.10f,        // fewer blobs if higher
-                radiantUnit = 20.dp,       // blob size scaling
-                colorUnit = 1.0f,          // color intensity
-                opacity = 1f               // background opacity
+                quality = bg.quality,
+                threshold = bg.threshold,
+                radiantUnit = bg.radiantUnit,
+                colorUnit = bg.colorUnit,
+                opacity = bg.opacity,
+                colorTheme = bg.theme,
+                customPalette = if (bg.theme == PaletteTheme.CUSTOM) bg.customPalette else null
             )
-
-
-            // Foreground content container with “glass card” feel
+            // Foreground (cards, list etc.)
             Column(
                 Modifier
                     .padding(pad)
@@ -78,12 +88,38 @@ fun DashboardScreen(
                             .fillMaxSize()
                             .padding(16.dp)
                     ) {
-                        // Title row
-                        Text(
-                            "Dashboard",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // Title row + quick "Theme" affordance
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Dashboard",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            // Home button
+                            SmallFloatingActionButton(
+                                onClick = onHome,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Home",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = onOpenBackgroundTheme) {
+                                Icon(
+                                    imageVector = Icons.Filled.ColorLens,
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Theme")
+                            }
+                        }
+
                         Spacer(Modifier.height(10.dp))
 
                         // Header
@@ -202,7 +238,7 @@ private fun RowItem(
                 }
             }
 
-            // Subtle linear progress hint under row (not exact time, just a quick visual)
+            // Subtle linear progress hint under row
             LinearProgressIndicator(
                 progress = { (pct / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier

@@ -2,12 +2,6 @@ package com.example.todo_app.ui
 
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -22,52 +16,53 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlin.math.floor
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * Real–world Perlin-grid background (LFSR-hashed gradients, no permutation table)
- * - Adaptive quality (AUTO/LOW/MEDIUM/HIGH)
- * - Lifecycle-aware (pauses in background)
- * - Reduce-motion aware (uses system animator scale)
- * - Theme-aware defaults (override colors if you want)
- *
- * Your math:
+ * Perlin-grid background (single octave, no permutation table)
+ * Keeps your math EXACTLY:
  *   depth = perlin3Lfsr(i*refinement, j*refinement, t)
  *   radiant = (depth - threshold) * radiant_unit
  *   colorFactor = (depth - threshold) * color_unit
+ *
+ * Themes: AQI, BIO_NEON, TERMINAL_LOG, CUSTOM — all smoothly interpolated.
  */
 @Composable
 fun BackgroundAnimation(
     modifier: Modifier = Modifier,
-    opacity: Float = 1f,                 // final alpha (0..1)
-    grainAlpha: Float = 0f,              // kept for API compat (unused here)
-    enableAgsl: Boolean = false,         // kept for API compat (unused here)
+    opacity: Float = 1f,
+    grainAlpha: Float = 0f,              // kept for API compat (unused)
+    enableAgsl: Boolean = false,         // kept for API compat (unused)
 
     // Real-world knobs
     quality: Quality = Quality.AUTO,
     threshold: Float = 0.0f,
     radiantUnit: Dp = 18.dp,
     colorUnit: Float = 0.9f,
-    baseA: Color? = null,                // null -> themed defaults
+
+    // Fallback tri-mix colors (only used if CUSTOM with no palette)
+    baseA: Color? = null,
     baseB: Color? = null,
     accent: Color? = null,
 
-    // LFSR parameters (tweak if you like)
-    lfsrSeed: Int = 1337,                // mixed into coordinate hash
-    lfsrTapMask: Int = 0x71              // 0b0111_0001 same as your Python sample
+    // LFSR parameters
+    lfsrSeed: Int = 1337,
+    lfsrTapMask: Int = 0x71,
+
+    // THEME controls
+    colorTheme: PaletteTheme = PaletteTheme.AQI,
+    customPalette: List<Color>? = null
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // Pause when not visible
     var inForeground by remember { mutableStateOf(true) }
@@ -103,43 +98,39 @@ fun BackgroundAnimation(
         else                   -> 1f
     }
 
-
-// Continuously accumulating time in seconds (no reset)
+    // Time accumulator in seconds
     var timeSec by remember { mutableStateOf(0f) }
     LaunchedEffect(inForeground, baseSpeed) {
         var lastNanos = 0L
         while (true) {
-            val now = withFrameNanos { it } // suspend until next frame
+            val now = withFrameNanos { it }
             if (lastNanos != 0L) {
-                // delta time in seconds, with a safety cap to avoid big jumps
                 val dt = ((now - lastNanos).coerceAtMost(50_000_000L)).toFloat() / 1_000_000_000f
-                if (inForeground) {
-                    timeSec += dt * baseSpeed
-                }
+                if (inForeground) timeSec += dt * baseSpeed
             }
             lastNanos = now
         }
     }
 
-    // Theme-ish defaults if colors not provided
-    val a = baseA ?: Color(0xFF5A5DF0) // indigo
-    val b = baseB ?: Color(0xFFEC6EA7) // pink
-    val c = accent ?: Color(0xFF4ED0C9) // teal
+    // Fallback tri-mix (only used for CUSTOM with no palette provided)
+    val fallbackTri = listOf(
+        baseA ?: Color(0xFF5A5DF0), // indigo
+        baseB ?: Color(0xFFEC6EA7), // pink
+        accent ?: Color(0xFF4ED0C9) // teal
+    )
 
     val radiusUnitPx = with(LocalDensity.current) { radiantUnit.toPx() }
 
-    // Precompute nothing large — LFSR hash is stateless per coordinate
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
 
-        val autoCellSize = profile.autoCellSizePx(w, h)
-        val cell = max(8f, autoCellSize)
+        val cell = max(8f, profile.autoCellSizePx(w, h))
         val cols = (w / cell).toInt() + 1
         val rows = (h / cell).toInt() + 1
 
-        // Scale and very-large wrap to avoid float precision drift, but no visible “loop”
+        // Your global time (no jitter/warp/fBm)
         val t = (timeSec * 10f) % 1_000_000f
 
         for (j in 0 until rows) {
@@ -147,7 +138,7 @@ fun BackgroundAnimation(
                 val cx = i * cell + cell * 0.5f
                 val cy = j * cell + cell * 0.5f
 
-                // LFSR-hashed Perlin (no permutation table)
+                // ---- YOUR MATH (unchanged) ----
                 val depth = perlin3Lfsr(
                     x = i * profile.refinement,
                     y = j * profile.refinement,
@@ -161,14 +152,24 @@ fun BackgroundAnimation(
                 if (radius <= 0.6f) continue
 
                 val colorFactor = (delta * colorUnit).coerceIn(0f, 1.2f)
-                val col = triMix(a, b, c, colorFactor)
-                val alpha = (opacity * min(1f, 0.15f + colorFactor * 0.85f)).coerceIn(0f, 1f)
+                // --------------------------------
+
+                val colorT = (colorFactor / 1.2f).coerceIn(0f, 1f)
+                val col = themedColorSmooth(
+                    t = colorT,
+                    theme = colorTheme,
+                    custom = customPalette,
+                    fallbackTri = fallbackTri
+                )
+
+                val alpha = (opacity * min(1f, 0.15f + colorFactor.coerceAtMost(1f) * 0.85f))
+                    .coerceIn(0f, 1f)
 
                 drawCircle(color = col.copy(alpha = alpha), radius = radius, center = Offset(cx, cy))
             }
         }
 
-        // Optional: ultra-light contours to “seat” the blobs visually
+        // Optional subtle contours
         if (profile.contours) {
             val step = max(16f, cell * 1.2f)
             val stroke = max(1f, cell * 0.035f)
@@ -211,7 +212,7 @@ enum class Quality {
             timeSpeed   = 0.02f,
             contours    = true
         )
-        else -> Profile(
+        else -> Profile( // AUTO
             refinement = 0.038f,
             cellTargetPx = 0f,
             timeSpeed   = 0.12f,
@@ -219,7 +220,6 @@ enum class Quality {
         )
     }
 }
-
 
 data class Profile(
     val refinement: Float,
@@ -230,7 +230,7 @@ data class Profile(
     fun autoCellSizePx(w: Float, h: Float): Float {
         if (cellTargetPx > 0f) return cellTargetPx
         val area = w * h
-        val targetCells = 1050f  // ~900–1200 blobs typical
+        val targetCells = 1050f
         val approxCell = sqrt(area / targetCells)
         return approxCell.coerceIn(18f, 42f)
     }
@@ -238,7 +238,7 @@ data class Profile(
 
 /* --------------------- LFSR-based Perlin (no perm table) --------------------- */
 
-/** Galois 8-bit LFSR: emits one 8-bit value by clocking 8 times (your Python lfsr8_galois). */
+/** Galois 8-bit LFSR: emits one 8-bit value by clocking 8 times. */
 private fun lfsr8Byte(seed: Int, tapMask: Int = 0x71): Int {
     require(seed in 1..0xFF) { "LFSR seed must be 1..255 (non-zero)" }
     var s = seed and 0xFF
@@ -252,18 +252,33 @@ private fun lfsr8Byte(seed: Int, tapMask: Int = 0x71): Int {
     return b and 0xFF
 }
 
-/** Mix integer coords into a non-zero 8-bit seed, then step the LFSR to get a hash byte. */
+/* -------- Strong integer hashing (non-linear avalanche) feeding LFSR -------- */
+
+private fun avalanche32(x0: Int): Int {
+    var x = x0
+    x = x xor (x ushr 16); x *= 0x7feb352d
+    x = x xor (x ushr 15); x *= 0x846ca68b.toInt()
+    x = x xor (x ushr 16)
+    return x
+}
+
+private fun hash32(xi: Int, yi: Int, zi: Int, seed: Int): Int {
+    var h = xi * 0x27d4eb2d
+    h = h xor (yi * 0x165667b1)
+    h = h xor (zi * 0x9e3779b1.toInt())
+    h = h xor seed
+    return avalanche32(h)
+}
+
 private fun hash8Lfsr(xi: Int, yi: Int, zi: Int, baseSeed: Int, tapMask: Int): Int {
-    // Simple, fast integer mixing (kept mod 256)
-    var s = (xi * 73) xor (yi * 199) xor (zi * 229) xor baseSeed
-    s = s and 0xFF
-    if (s == 0) s = 1
-    return lfsr8Byte(s, tapMask)
+    val s = (hash32(xi, yi, zi, baseSeed) ushr 8) and 0xFF
+    val seed8 = if (s != 0) s else 1
+    return lfsr8Byte(seed8, tapMask)
 }
 
 /**
- * Perlin noise with LFSR-hashed gradients. Returns ~[-1,1].
- * Drop-in replacement for perm-table Perlin.
+ * Single-octave Perlin with LFSR-hashed gradients. Returns ~[-1,1].
+ * (Interface unchanged; improved internal hashing only.)
  */
 private fun perlin3Lfsr(
     x: Float,
@@ -272,22 +287,18 @@ private fun perlin3Lfsr(
     baseSeed: Int,
     tapMask: Int
 ): Float {
-    // Lattice coords
     val X = fastFloor(x)
     val Y = fastFloor(y)
     val Z = fastFloor(z)
 
-    // Relative position inside cube
     val xf = x - floor(x)
     val yf = y - floor(y)
     val zf = z - floor(z)
 
-    // Fade curves
     val u = fade(xf)
     val v = fade(yf)
     val w = fade(zf)
 
-    // 8 corner hashes via LFSR
     val hAA  = hash8Lfsr(X,     Y,     Z,     baseSeed, tapMask)
     val hBA  = hash8Lfsr(X + 1, Y,     Z,     baseSeed, tapMask)
     val hAB  = hash8Lfsr(X,     Y + 1, Z,     baseSeed, tapMask)
@@ -298,28 +309,19 @@ private fun perlin3Lfsr(
     val hAB1 = hash8Lfsr(X,     Y + 1, Z + 1, baseSeed, tapMask)
     val hBB1 = hash8Lfsr(X + 1, Y + 1, Z + 1, baseSeed, tapMask)
 
-    // Dot products at corners
-    val x1 = lerp(
-        grad(hAA,  xf,     yf,     zf),
-        grad(hBA,  xf - 1, yf,     zf), u
-    )
-    val x2 = lerp(
-        grad(hAB,  xf,     yf - 1, zf),
-        grad(hBB,  xf - 1, yf - 1, zf), u
-    )
+    val x1 = lerp(grad(hAA,  xf,     yf,     zf),
+        grad(hBA,  xf - 1, yf,     zf), u)
+    val x2 = lerp(grad(hAB,  xf,     yf - 1, zf),
+        grad(hBB,  xf - 1, yf - 1, zf), u)
     val y1 = lerp(x1, x2, v)
 
-    val x3 = lerp(
-        grad(hAA1, xf,     yf,     zf - 1),
-        grad(hBA1, xf - 1, yf,     zf - 1), u
-    )
-    val x4 = lerp(
-        grad(hAB1, xf,     yf - 1, zf - 1),
-        grad(hBB1, xf - 1, yf - 1, zf - 1), u
-    )
+    val x3 = lerp(grad(hAA1, xf,     yf,     zf - 1),
+        grad(hBA1, xf - 1, yf,     zf - 1), u)
+    val x4 = lerp(grad(hAB1, xf,     yf - 1, zf - 1),
+        grad(hBB1, xf - 1, yf - 1, zf - 1), u)
     val y2 = lerp(x3, x4, v)
 
-    return lerp(y1, y2, w) // ~[-1,1]
+    return lerp(y1, y2, w)
 }
 
 /* --------------------------- Perlin helpers --------------------------- */
@@ -327,7 +329,6 @@ private fun perlin3Lfsr(
 private fun fade(t: Float): Float = t * t * t * (t * (t * 6f - 15f) + 10f)
 private fun lerp(a: Float, b: Float, t: Float): Float = a + t * (b - a)
 
-/** Classic 3D Perlin gradient selector using low 4 bits of the hash. */
 private fun grad(hash: Int, x: Float, y: Float, z: Float): Float {
     val h = hash and 15
     val u = if (h < 8) x else y
@@ -339,11 +340,68 @@ private fun grad(hash: Int, x: Float, y: Float, z: Float): Float {
 
 private fun fastFloor(x: Float): Int = if (x >= 0f) x.toInt() else x.toInt() - 1
 
-/* --------------------------- Color helpers --------------------------- */
+/* ------------------------------ Themes (smooth) ------------------------------ */
 
-private fun triMix(a: Color, b: Color, c: Color, tIn: Float): Color {
+/** All themes below are sampled as smooth gradients. */
+private fun themedColorSmooth(
+    t: Float,
+    theme: PaletteTheme,
+    custom: List<Color>?,
+    fallbackTri: List<Color>
+): Color = when (theme) {
+    PaletteTheme.CUSTOM ->
+        paletteSample(custom?.takeIf { it.size >= 2 } ?: fallbackTri, t, smooth = true)
+    PaletteTheme.AQI ->
+        paletteSample(aqiPalette, t, smooth = true)
+    PaletteTheme.BIO_NEON ->
+        paletteSample(bioNeonPalette, t, smooth = true)
+    PaletteTheme.TERMINAL_LOG ->
+        paletteSample(terminalLogPalette, t, smooth = true)
+}
+
+/* AQI gradient (Excellent → Dangerous), now smooth across the 6 anchors */
+private val aqiPalette = listOf(
+    Color(0xFF00E400), // Excellent (Green)
+    Color(0xFFFFFF00), // Fair (Yellow)
+    Color(0xFFFF7E00), // Poor (Orange)
+    Color(0xFFFF0000), // Unhealthy (Red)
+    Color(0xFF8F3F97), // Very Unhealthy (Purple)
+    Color(0xFF7E0023)  // Dangerous (Maroon)
+)
+
+/* Bio-neon gradient: aqua glow < light cyan < hot magenta < golden highlight */
+private val bioNeonPalette = listOf(
+    Color(0xFF00D4FF), // aqua glow
+    Color(0xFF7FE0FF), // light cyan
+    Color(0xFFFF00A5), // hot magenta
+    Color(0xFFFFD54F)  // golden highlight
+)
+
+/* Terminal log severity (TRACE→DEBUG→INFO→WARN→ERROR→FATAL) as a smooth ramp */
+private val terminalLogPalette = listOf(
+    Color(0xFF808080), // TRACE (gray)
+    Color(0xFF00FFFF), // DEBUG (cyan)
+    Color(0xFF00FF00), // INFO (green)
+    Color(0xFFFFFF00), // WARN (yellow)
+    Color(0xFFFF5555), // ERROR (bright red)
+    Color(0xFFFF00FF)  // FATAL (magenta)
+)
+
+/* --------------------------- Palette sampling --------------------------- */
+
+private fun paletteSample(p: List<Color>, tIn: Float, smooth: Boolean): Color {
     val t = tIn.coerceIn(0f, 1f)
-    return if (t < 0.66f) lerpColor(a, b, t / 0.66f) else lerpColor(b, c, (t - 0.66f) / 0.34f)
+    if (p.size == 1) return p.first()
+    val n = p.size - 1
+    return if (smooth) {
+        val pos = t * n
+        val i = pos.toInt().coerceIn(0, n - 1)
+        val f = pos - i
+        lerpColor(p[i], p[i + 1], f)
+    } else {
+        val i = (t * p.size).toInt().coerceIn(0, p.size - 1)
+        p[i]
+    }
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float): Color {
