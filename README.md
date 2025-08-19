@@ -93,53 +93,29 @@ The `BackgroundAnimation` composable renders a Perlin-grid animated background. 
 
 ## Composable API (source-aligned)
 
-| Parameter | Type | Default | Notes |
-|---|---|---|---|
-| `modifier` | `Modifier` | — | Canvas host. |
-| `opacity` | `Float` | `1f` | Multiplies fill alpha. |
-| `grainAlpha` | `Float` | `0f` | Reserved for grain overlay (not drawn in current snippet). |
-| `enableAgsl` | `Boolean` | `false` | Placeholder for AGSL path. |
-| `quality` | `Quality` | `Quality.AUTO` | Influences `Profile`. |
-| `threshold` | `Float` | `0.0f` | Depth cutoff; below = no circle. |
-| `radiantUnit` | `Dp` | `18.dp` | Radius unit multiplier. |
-| `colorUnit` | `Float` | `0.9f` | Scales color factor. |
-| `baseA` / `baseB` / `accent` | `Color?` | `null` | Fallback palette when `CUSTOM` missing. |
-| `lfsrSeed` | `Int` | `1337` | LFSR seed. |
-| `lfsrTapMask` | `Int` | `0x71` | LFSR tap mask. |
-| `colorTheme` | `PaletteTheme` | `AQI` | Palette set. |
-| `customPalette` | `List<Color>?` | `null` | Used when `PaletteTheme.CUSTOM`. |
-
-### Runtime factors
-- Foreground detection via `LifecycleEventObserver` pauses time accumulation when not in `ON_RESUME`.
-- Power Saver (`PowerManager.isPowerSaveMode`) + **Quality** → `Profile` using `Quality.resolve(powerSave)`.
-- Global Animator scale (`Settings.Global.ANIMATOR_DURATION_SCALE`) clamps animation speeds: 0 => very slow, `<0.5` => half speed.
-
-### Profile (from `Quality.resolve`)
-- **LOW**/**PowerSave** → `Profile(0.030f, 36f, 0.05f, false)`
-- **MEDIUM** → `Profile(0.036f, 28f, 0.05f, false)`
-- **HIGH** → `Profile(0.042f, 22f, 0.02f, true)`
-- **AUTO** → `Profile(0.038f, 0f, 0.12f, true)` *(auto cell size)*
+(see parameter table above)
 
 ### Rendering steps (exact math)
-1. Compute `baseSpeed = profile.timeSpeed` scaled by animator scale bucket.
-2. Accumulate `timeSec` in a `LaunchedEffect` loop using `withFrameNanos`; clamp `dt` ≤ 50ms.
-3. Derive `cell = max(8f, profile.autoCellSizePx(w, h))`, then grid `cols/rows`.
-4. For each cell center `(i,j)` with time `t = (timeSec * 10f) % 1_000_000f`:
-   - `depth = perlin3Lfsr(i*refinement, j*refinement, t, lfsrSeed, lfsrTapMask)`
-   - `delta = depth - threshold`
-   - `radius = max(0, delta * radiantUnitPx)`; skip if `≤ 0.6`
-   - `colorFactor = clamp(delta * colorUnit, 0..1.2)`
-   - `colorT = clamp(colorFactor / 1.2, 0..1)`
-   - `color = themedColorSmooth(colorT, colorTheme, customPalette, fallbackTri)`
-   - `alpha = clamp(opacity * (0.15 + min(1, colorFactor) * 0.85), 0..1)`
-   - Draw circle at `(cx, cy)` with `radius`, `color.copy(alpha)`
-5. Optional **contours**: grid lines every `max(16, cell*1.2)` px with stroke `max(1, cell*0.035)`.
 
-### Palettes
-- `AQI` (6-step), `BIO_NEON` (neon cyan/pink/yellow), `TERMINAL_LOG` (terminal-like grays + primaries), or **CUSTOM**.
-- `themedColorSmooth` samples palettes smoothly (`lerpColor`) across stops.
+1. Compute baseSpeed.
+2. Accumulate timeSec.
+3. Derive grid.
+4. For each cell, compute depth, delta, radius, colorFactor, color, alpha.
+5. Draw circle or contours.
 
-## Mermaid — Animation data flow
+### Simple Math Formulation
+
+Let `(i, j)` index grid cells, `t` the animation time, and `P(x,y,z)` the Perlin‑LFSR noise function.
+
+* Depth:   dᵢⱼ(t) = P(i·r, j·r, t)
+* Delta:   Δᵢⱼ(t) = dᵢⱼ(t) − θ
+* Radius:  Rᵢⱼ(t) = max(0, Δᵢⱼ(t) · U)
+* Color:   Cᵢⱼ(t) = clamp(Δᵢⱼ(t) · u, 0, 1.2)
+* Norm:    Tᵢⱼ = Cᵢⱼ(t)/1.2
+* Alpha:   αᵢⱼ(t) = clamp(opacity × (0.15 + min(1,Cᵢⱼ(t)) × 0.85), 0, 1)
+
+Circle drawn if Rᵢⱼ(t) > 0.6.
+
 ```mermaid
 flowchart TD
   Quality -->|resolve| Profile
@@ -150,9 +126,9 @@ flowchart TD
   Time --> Perlin[perlin3Lfsr]
   Profile --> Perlin
   Threshold --> Perlin
-  Perlin --> Delta[delta]
-  Delta --> Radius
-  Delta --> ColorFactor
+  Perlin --> Delta[Δ]
+  Delta --> Radius[R]
+  Delta --> ColorFactor[C]
   Radius --> Draw[drawCircle]
   ColorFactor --> Palette[themedColorSmooth]
   Palette --> Draw
@@ -161,30 +137,27 @@ flowchart TD
   Contours --> Draw
 ```
 
-> This exactly matches the provided `BackgroundAnimation` source, including parameter names, enums, and helper functions (`Quality.resolve`, `Profile.autoCellSizePx`, palette helpers, and LFSR-based Perlin hashing).
-
-1. **Base Layer**: fill with `colorPrimary` or `imageUri`.
-2. **Secondary Overlay**: apply `colorSecondary` with `opacity`.
-3. **Animation**: if `animSpeed > 0`, run an infinite loop (`rememberInfiniteTransition`) animating gradient offset or particle flow.
-4. **Blur / Noise**: draw blur shader and grain effect overlays if set.
-5. **Compose Integration**: wrapped in a `Box` beneath all other composables.
+# Page Navigation Flow
 
 ```mermaid
 flowchart TD
-  Prefs[ThemePrefs] -->|colors| Base[Base Layer]
-  Prefs -->|imageUri| Base
-  Prefs -->|colorSecondary + opacity| Overlay[Overlay]
-  Prefs -->|animSpeed| Anim[Animation Loop]
-  Prefs -->|blur, noise| Effects[Blur + Noise]
-  Base --> Render[Final Background]
-  Overlay --> Render
-  Anim --> Render
-  Effects --> Render
+  Home[HomeScreen] --> Main[MainScreen]
+  Main --> Theme[ThemePicker]
+  Main --> Proj[ProjectScreen]
+  Proj --> Dash[Dashboard]
+  Dash --> Task[TaskScreen]
+  Task --> Edit[TaskEditScreen]
 ```
 
----
-
-# Page Navigation Flow
+```mermaid
+flowchart TD
+  %% Task internals kept separate to avoid line-join parse errors
+  Task[TaskScreen]
+  Task --> NoteModal[Notes Modal (Markdown)]
+  Task --> Pie[Pie: actual/expected]
+  Task --> Dates[Due & Expected Finish]
+  Task --> Stopwatch[Stopwatch Start/Stop]
+```
 
 ```mermaid
 flowchart TD
@@ -254,20 +227,120 @@ erDiagram
   TAG  ||--o{ TASK_TAG : maps
 ```
 
-
-
 ---
 
-# Entity Summaries
+# Entity Data Types (Detailed)
 
-| Entity       | Description |
-|--------------|-------------|
-| **Project**      | Container for multiple tasks; tracks metadata like start date, oldest due date, and aggregated satisfaction. |
-| **Task**         | Work item within a project; has title, description, status, scheduling fields, stopwatch tracking, and notes. |
-| **TaskStatus**   | Enum: `OPEN`, `IN_PROGRESS`, `DONE`, `CANCELLED`. |
-| **TaskTimeLog**  | Records precise effort intervals from stopwatch sessions (start, end, duration). |
-| **Tag**          | User-defined label with a name and optional color for categorizing tasks. |
-| **TaskTag**      | Join entity for many-to-many relation between tasks and tags. |
-| **ThemePrefs**   | User theme settings including mode, colors, background image, opacity, blur, noise, and animation speed. |
-| **ThemeMode**    | Enum: `LIGHT`, `DARK`, `SYSTEM`. |
+### Project
 
+| Field                | Type   | Unit / Domain | Notes                      |
+| -------------------- | ------ | ------------- | -------------------------- |
+| id                   | Long   | PK            | Primary key                |
+| projectName          | String | —             | Unique project name        |
+| taskItemNumber       | Int    | count         | Maintained by repo/trigger |
+| startDate            | Long   | epoch ms      | Creation timestamp         |
+| oldestExpirationDate | Long?  | epoch ms      | Earliest Task.dueAt        |
+| userSatisfaction     | Float? | 0.0–1.0       | DONE / (IN\_PROGRESS+DONE) |
+
+### Task
+
+| Field               | Type       | Unit / Domain | Notes                               |
+| ------------------- | ---------- | ------------- | ----------------------------------- |
+| id                  | Long       | PK            | Task id                             |
+| projectId           | Long       | FK            | References Project.id               |
+| title               | String     | —             | Title                               |
+| description         | String?    | —             | Optional details                    |
+| status              | TaskStatus | enum          | OPEN, IN\_PROGRESS, DONE, CANCELLED |
+| dueAt               | Long?      | epoch ms      | Due date                            |
+| expFinishEpoch      | Long?      | epoch ms      | Expected finish time                |
+| expDurMinutes       | Int?       | minutes       | Expected duration                   |
+| expectedDurationSec | Int?       | seconds       | Expected duration                   |
+| actMinutes          | Int        | minutes       | Legacy field                        |
+| createdAt           | Long       | epoch ms      | Creation time                       |
+| updatedAt           | Long       | epoch ms      | Update time                         |
+| runningSinceEpoch   | Long?      | epoch ms      | Stopwatch start                     |
+| note                | String     | markdown      | Notes                               |
+
+### TaskStatus
+
+| Value        | Alias     |
+| ------------ | --------- |
+| OPEN         | New task  |
+| IN\_PROGRESS | Active    |
+| DONE         | Completed |
+| CANCELLED    | Aborted   |
+
+### TaskTimeLog
+
+| Field       | Type  | Unit     | Notes                    |
+| ----------- | ----- | -------- | ------------------------ |
+| id          | Long  | PK       | Log id                   |
+| taskId      | Long  | FK       | Task reference           |
+| startedAt   | Long  | epoch ms | Start timestamp          |
+| endedAt     | Long? | epoch ms | End timestamp            |
+| durationSec | Long? | seconds  | Duration = ended-started |
+
+### Tag
+
+| Field | Type    | Notes          |
+| ----- | ------- | -------------- |
+| id    | Long    | PK             |
+| name  | String  | Tag label      |
+| color | String? | HEX color code |
+
+### TaskTag
+
+| Field  | Type | Notes      |
+| ------ | ---- | ---------- |
+| taskId | Long | FK Task.id |
+| tagId  | Long | FK Tag.id  |
+
+### ThemePrefs
+
+| Field          | Type      | Unit / Domain | Notes                     |
+| -------------- | --------- | ------------- | ------------------------- |
+| id             | Long      | PK            | Pref id                   |
+| mode           | ThemeMode | enum          | LIGHT, DARK, SYSTEM       |
+| colorPrimary   | String?   | HEX           | Base color                |
+| colorSecondary | String?   | HEX           | Overlay color             |
+| imageUri       | String?   | URI           | Optional background image |
+| opacity        | Float     | 0.0–1.0       | Alpha multiplier          |
+| blur           | Float     | px            | Blur radius               |
+| noise          | Float     | factor        | Noise intensity           |
+| animSpeed      | Float     | multiplier    | 0 disables animation      |
+| updatedAt      | Long      | epoch ms      | Last update               |
+
+### ThemeMode
+
+| Value  | Notes         |
+| ------ | ------------- |
+| LIGHT  | Light theme   |
+| DARK   | Dark theme    |
+| SYSTEM | Follow system |
+
+### Profile (BackgroundAnimation)
+
+| Field        | Type    | Unit / Domain | Notes                      |
+| ------------ | ------- | ------------- | -------------------------- |
+| refinement   | Float   | factor        | Perlin refinement          |
+| cellTargetPx | Float   | px            | Desired cell size (0=auto) |
+| timeSpeed    | Float   | multiplier    | Base time speed            |
+| contours     | Boolean | flag          | Draw contour grid          |
+
+### Quality
+
+| Value  | Notes                                 |
+| ------ | ------------------------------------- |
+| LOW    | Lower refinement, slower, no contours |
+| MEDIUM | Medium refinement                     |
+| HIGH   | High refinement, contours on          |
+| AUTO   | Auto cell sizing, faster              |
+
+### PaletteTheme
+
+| Value         | Notes                     |
+| ------------- | ------------------------- |
+| AQI           | Air Quality Index palette |
+| BIO\_NEON     | Neon bio colors           |
+| TERMINAL\_LOG | Terminal‑like palette     |
+| CUSTOM        | Provided custom palette   |
