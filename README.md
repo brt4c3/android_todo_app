@@ -153,7 +153,7 @@ flowchart TD
 flowchart TD
   %% Task internals kept separate to avoid line-join parse errors
   Task[TaskScreen]
-  Task --> NoteModal[Notes Modal (Markdown)]
+  Task --> NoteModal[Notes Modal Markdown]
   Task --> Pie[Pie: actual/expected]
   Task --> Dates[Due & Expected Finish]
   Task --> Stopwatch[Stopwatch Start/Stop]
@@ -168,7 +168,7 @@ flowchart TD
   Dash --> Task[TaskScreen]
   Task --> Edit[TaskEditScreen]
 
-  Task -->|open| NoteModal[Notes Modal (Markdown)]
+  Task -->|open| NoteModal[Notes Modal Markdown]
   Task --> Pie[Pie: actual/expected]
   Task --> Dates[Due & Expected Finish]
   Task --> Stopwatch[Stopwatch Start/Stop]
