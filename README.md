@@ -93,59 +93,53 @@ The `BackgroundAnimation` composable renders a Perlin-grid animated background. 
 
 ## Composable API (source-aligned)
 
-| Parameter                    | Type           | Default        | Notes                                                      |
-| ---------------------------- | -------------- | -------------- | ---------------------------------------------------------- |
-| `modifier`                   | `Modifier`     | —              | Canvas host.                                               |
-| `opacity`                    | `Float`        | `1f`           | Multiplies fill alpha.                                     |
-| `grainAlpha`                 | `Float`        | `0f`           | Reserved for grain overlay (not drawn in current snippet). |
-| `enableAgsl`                 | `Boolean`      | `false`        | Placeholder for AGSL path.                                 |
-| `quality`                    | `Quality`      | `Quality.AUTO` | Influences `Profile`.                                      |
-| `threshold`                  | `Float`        | `0.0f`         | Depth cutoff; below = no circle.                           |
-| `radiantUnit`                | `Dp`           | `18.dp`        | Radius unit multiplier.                                    |
-| `colorUnit`                  | `Float`        | `0.9f`         | Scales color factor.                                       |
-| `baseA` / `baseB` / `accent` | `Color?`       | `null`         | Fallback palette when `CUSTOM` missing.                    |
-| `lfsrSeed`                   | `Int`          | `1337`         | LFSR seed.                                                 |
-| `lfsrTapMask`                | `Int`          | `0x71`         | LFSR tap mask.                                             |
-| `colorTheme`                 | `PaletteTheme` | `AQI`          | Palette set.                                               |
-| `customPalette`              | `List<Color>?` | `null`         | Used when `PaletteTheme.CUSTOM`.                           |
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `modifier` | `Modifier` | — | Canvas host. |
+| `opacity` | `Float` | `1f` | Multiplies fill alpha. |
+| `grainAlpha` | `Float` | `0f` | Reserved for grain overlay (not drawn in current snippet). |
+| `enableAgsl` | `Boolean` | `false` | Placeholder for AGSL path. |
+| `quality` | `Quality` | `Quality.AUTO` | Influences `Profile`. |
+| `threshold` | `Float` | `0.0f` | Depth cutoff; below = no circle. |
+| `radiantUnit` | `Dp` | `18.dp` | Radius unit multiplier. |
+| `colorUnit` | `Float` | `0.9f` | Scales color factor. |
+| `baseA` / `baseB` / `accent` | `Color?` | `null` | Fallback palette when `CUSTOM` missing. |
+| `lfsrSeed` | `Int` | `1337` | LFSR seed. |
+| `lfsrTapMask` | `Int` | `0x71` | LFSR tap mask. |
+| `colorTheme` | `PaletteTheme` | `AQI` | Palette set. |
+| `customPalette` | `List<Color>?` | `null` | Used when `PaletteTheme.CUSTOM`. |
 
 ### Runtime factors
-
-* Foreground detection via `LifecycleEventObserver` pauses time accumulation when not in `ON_RESUME`.
-* Power Saver (`PowerManager.isPowerSaveMode`) + **Quality** → `Profile` using `Quality.resolve(powerSave)`.
-* Global Animator scale (`Settings.Global.ANIMATOR_DURATION_SCALE`) clamps animation speeds: 0 => very slow, `<0.5` => half speed.
+- Foreground detection via `LifecycleEventObserver` pauses time accumulation when not in `ON_RESUME`.
+- Power Saver (`PowerManager.isPowerSaveMode`) + **Quality** → `Profile` using `Quality.resolve(powerSave)`.
+- Global Animator scale (`Settings.Global.ANIMATOR_DURATION_SCALE`) clamps animation speeds: 0 => very slow, `<0.5` => half speed.
 
 ### Profile (from `Quality.resolve`)
-
-* **LOW**/**PowerSave** → `Profile(0.030f, 36f, 0.05f, false)`
-* **MEDIUM** → `Profile(0.036f, 28f, 0.05f, false)`
-* **HIGH** → `Profile(0.042f, 22f, 0.02f, true)`
-* **AUTO** → `Profile(0.038f, 0f, 0.12f, true)` *(auto cell size)*
+- **LOW**/**PowerSave** → `Profile(0.030f, 36f, 0.05f, false)`
+- **MEDIUM** → `Profile(0.036f, 28f, 0.05f, false)`
+- **HIGH** → `Profile(0.042f, 22f, 0.02f, true)`
+- **AUTO** → `Profile(0.038f, 0f, 0.12f, true)` *(auto cell size)*
 
 ### Rendering steps (exact math)
-
 1. Compute `baseSpeed = profile.timeSpeed` scaled by animator scale bucket.
 2. Accumulate `timeSec` in a `LaunchedEffect` loop using `withFrameNanos`; clamp `dt` ≤ 50ms.
 3. Derive `cell = max(8f, profile.autoCellSizePx(w, h))`, then grid `cols/rows`.
 4. For each cell center `(i,j)` with time `t = (timeSec * 10f) % 1_000_000f`:
-
-   * `depth = perlin3Lfsr(i*refinement, j*refinement, t, lfsrSeed, lfsrTapMask)`
-   * `delta = depth - threshold`
-   * `radius = max(0, delta * radiantUnitPx)`; skip if `≤ 0.6`
-   * `colorFactor = clamp(delta * colorUnit, 0..1.2)`
-   * `colorT = clamp(colorFactor / 1.2, 0..1)`
-   * `color = themedColorSmooth(colorT, colorTheme, customPalette, fallbackTri)`
-   * `alpha = clamp(opacity * (0.15 + min(1, colorFactor) * 0.85), 0..1)`
-   * Draw circle at `(cx, cy)` with `radius`, `color.copy(alpha)`
+   - `depth = perlin3Lfsr(i*refinement, j*refinement, t, lfsrSeed, lfsrTapMask)`
+   - `delta = depth - threshold`
+   - `radius = max(0, delta * radiantUnitPx)`; skip if `≤ 0.6`
+   - `colorFactor = clamp(delta * colorUnit, 0..1.2)`
+   - `colorT = clamp(colorFactor / 1.2, 0..1)`
+   - `color = themedColorSmooth(colorT, colorTheme, customPalette, fallbackTri)`
+   - `alpha = clamp(opacity * (0.15 + min(1, colorFactor) * 0.85), 0..1)`
+   - Draw circle at `(cx, cy)` with `radius`, `color.copy(alpha)`
 5. Optional **contours**: grid lines every `max(16, cell*1.2)` px with stroke `max(1, cell*0.035)`.
 
 ### Palettes
-
-* `AQI` (6-step), `BIO_NEON` (neon cyan/pink/yellow), `TERMINAL_LOG` (terminal-like grays + primaries), or **CUSTOM**.
-* `themedColorSmooth` samples palettes smoothly (`lerpColor`) across stops.
+- `AQI` (6-step), `BIO_NEON` (neon cyan/pink/yellow), `TERMINAL_LOG` (terminal-like grays + primaries), or **CUSTOM**.
+- `themedColorSmooth` samples palettes smoothly (`lerpColor`) across stops.
 
 ## Mermaid — Animation data flow
-
 ```mermaid
 flowchart TD
   Quality -->|resolve| Profile
@@ -260,17 +254,20 @@ erDiagram
   TAG  ||--o{ TASK_TAG : maps
 ```
 
+
+
 ---
 
 # Entity Summaries
 
-| Entity          | Description                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Project**     | Container for multiple tasks; tracks metadata like start date, oldest due date, and aggregated satisfaction.  |
-| **Task**        | Work item within a project; has title, description, status, scheduling fields, stopwatch tracking, and notes. |
-| **TaskStatus**  | Enum: `OPEN`, `IN_PROGRESS`, `DONE`, `CANCELLED`.                                                             |
-| **TaskTimeLog** | Records precise effort intervals from stopwatch sessions (start, end, duration).                              |
-| **Tag**         | User-defined label with a name and optional color for categorizing tasks.                                     |
-| **TaskTag**     | Join entity for many-to-many relation between tasks and tags.                                                 |
-| **ThemePrefs**  | User theme settings including mode, colors, background image, opacity, blur, noise, and animation speed.      |
-| **ThemeMode**   | Enum: `LIGHT`, `DARK`, `SYSTEM`.                                                                              |
+| Entity       | Description |
+|--------------|-------------|
+| **Project**      | Container for multiple tasks; tracks metadata like start date, oldest due date, and aggregated satisfaction. |
+| **Task**         | Work item within a project; has title, description, status, scheduling fields, stopwatch tracking, and notes. |
+| **TaskStatus**   | Enum: `OPEN`, `IN_PROGRESS`, `DONE`, `CANCELLED`. |
+| **TaskTimeLog**  | Records precise effort intervals from stopwatch sessions (start, end, duration). |
+| **Tag**          | User-defined label with a name and optional color for categorizing tasks. |
+| **TaskTag**      | Join entity for many-to-many relation between tasks and tags. |
+| **ThemePrefs**   | User theme settings including mode, colors, background image, opacity, blur, noise, and animation speed. |
+| **ThemeMode**    | Enum: `LIGHT`, `DARK`, `SYSTEM`. |
+
